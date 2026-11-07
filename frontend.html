@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        input,
+        select,
+        button {
+            padding: 10px;
+        }
+
+        li {
+            margin-bottom: 15px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            list-style: none;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #message {
+            margin-top: 15px;
+        }
+
+        #editStudentForm {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Students</h1>
+
+    <ul id="studentsList"></ul>
+
+    <h2>Add Student</h2>
+
+    <form id="addStudentForm">
+
+        <label for="name">Name:</label>
+        <input type="text" id="name" required>
+
+        <label for="age">Age:</label>
+        <input type="number" id="age" required min="1">
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" required>
+
+        <button type="submit">Add Student</button>
+
+    </form>
+
+
+    <h2>Edit Student</h2>
+
+    <form id="editStudentForm">
+
+        <input type="hidden" id="editId">
+
+        <label for="editName">Name:</label>
+        <input type="text" id="editName">
+
+        <label for="editAge">Age:</label>
+        <input type="number" id="editAge" min="1">
+
+        <label for="editEmail">Email:</label>
+        <input type="email" id="editEmail">
+
+        <label for="updateMethod">Update Method:</label>
+
+        <select id="updateMethod">
+            <option value="PUT">PUT (Update all fields)</option>
+            <option value="PATCH">PATCH (Update selected fields)</option>
+        </select>
+
+        <button type="submit">Update Student</button>
+
+        <button type="button" id="cancelEdit">
+            Cancel
+        </button>
+
+    </form>
+
+    <p id="message"></p>
+
+
+    <script>
+
+        const base_url = 'http://localhost:3112';
+
+        const studentsList = document.getElementById('studentsList');
+
+        const addStudentForm = document.getElementById('addStudentForm');
+
+        const editStudentForm = document.getElementById('editStudentForm');
+
+        const message = document.getElementById('message');
+
+
+        // Reusable API request function
+        async function apiRequest(endpoint, method = 'GET', body = null) {
+
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+
+            if (body !== null) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(base_url + endpoint, options);
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message);
+            }
+
+            return result;
+        }
+
+
+        // Display all students
+        function displayStudents(students) {
+
+            studentsList.innerHTML = '';
+
+            students.forEach(student => {
+
+                const li = document.createElement('li');
+
+                const details = document.createElement('div');
+
+                details.textContent =
+                    `${student.name} (${student.age} years old) - ${student.email}`;
+
+                const actions = document.createElement('div');
+
+                actions.className = 'actions';
+
+
+                // Edit button
+                const editButton = document.createElement('button');
+
+                editButton.textContent = 'Edit';
+
+                editButton.addEventListener('click', () => {
+                    editStudent(student);
+                });
+
+
+                // Delete button
+                const deleteButton = document.createElement('button');
+
+                deleteButton.textContent = 'Delete';
+
+                deleteButton.addEventListener('click', () => {
+                    deleteStudent(student.id);
+                });
+
+
+                actions.appendChild(editButton);
+                actions.appendChild(deleteButton);
+
+                li.appendChild(details);
+                li.appendChild(actions);
+
+                studentsList.appendChild(li);
+
+            });
+
+        }
+
+
+        // Fetch all students
+        async function fetchStudents() {
+
+            try {
+
+                const result = await apiRequest('/students');
+
+                displayStudents(result.data);
+
+            } catch (error) {
+
+                console.error(error);
+
+                message.textContent = error.message;
+
+            }
+
+        }
+
+
+        // Create student
+        addStudentForm.addEventListener('submit', async (event) => {
+
+            event.preventDefault();
+
+            const name = document.getElementById('name').value.trim();
+
+            const age = document.getElementById('age').value;
+
+            const email = document.getElementById('email').value.trim();
+
+
+            try {
+
+                const result = await apiRequest('/students', 'POST', {
+                    name,
+                    age: Number(age),
+                    email
+                });
+
+                message.textContent = result.message;
+
+                addStudentForm.reset();
+
+                await fetchStudents();
+
+            } catch (error) {
+
+                console.error(error);
+
+                message.textContent = error.message;
+
+            }
+
+        });
+
+
+        // Load student details into edit form
+        function editStudent(student) {
+
+            document.getElementById('editId').value = student.id;
+
+            document.getElementById('editName').value = student.name;
+
+            document.getElementById('editAge').value = student.age;
+
+            document.getElementById('editEmail').value = student.email;
+
+            editStudentForm.style.display = 'flex';
+
+            editStudentForm.scrollIntoView({
+                behavior: 'smooth'
+            });
+
+        }
+
+
+        // Update student using PUT or PATCH
+        editStudentForm.addEventListener('submit', async (event) => {
+
+            event.preventDefault();
+
+            const id = document.getElementById('editId').value;
+
+            const name = document.getElementById('editName').value.trim();
+
+            const age = document.getElementById('editAge').value;
+
+            const email = document.getElementById('editEmail').value.trim();
+
+            const method = document.getElementById('updateMethod').value;
+
+
+            try {
+
+                let body;
+
+                if (method === 'PUT') {
+
+                    // PUT requires all fields
+                    if (!name || !age || !email) {
+                        throw new Error('Please provide all fields for PUT');
+                    }
+
+                    body = {
+                        name,
+                        age: Number(age),
+                        email
+                    };
+
+                } else {
+
+                    // PATCH sends only changed fields
+                    body = {};
+
+                    const originalStudent = await apiRequest(`/students/${id}`);
+
+                    const original = originalStudent.data;
+
+                    if (name !== original.name) {
+                        body.name = name;
+                    }
+
+                    if (age !== String(original.age)) {
+                        body.age = Number(age);
+                    }
+
+                    if (email !== original.email) {
+                        body.email = email;
+                    }
+
+                    if (Object.keys(body).length === 0) {
+                        throw new Error('No changes detected');
+                    }
+
+                }
+
+
+                const result = await apiRequest(
+                    `/students/${id}`,
+                    method,
+                    body
+                );
+
+                message.textContent = result.message;
+
+                editStudentForm.reset();
+
+                editStudentForm.style.display = 'none';
+
+                await fetchStudents();
+
+            } catch (error) {
+
+                console.error(error);
+
+                message.textContent = error.message;
+
+            }
+
+        });
+
+
+        // Cancel editing
+        document.getElementById('cancelEdit').addEventListener('click', () => {
+
+            editStudentForm.reset();
+
+            editStudentForm.style.display = 'none';
+
+        });
+
+
+        // Delete student
+        async function deleteStudent(id) {
+
+            const confirmDelete = confirm(
+                'Are you sure you want to delete this student?'
+            );
+
+            if (!confirmDelete) return;
+
+
+            try {
+
+                const result = await apiRequest(
+                    `/students/${id}`,
+                    'DELETE'
+                );
+
+                message.textContent = result.message;
+
+                editStudentForm.style.display = 'none';
+
+                await fetchStudents();
+
+            } catch (error) {
+
+                console.error(error);
+
+                message.textContent = error.message;
+
+            }
+
+        }
+
+
+        // Load students when page opens
+        fetchStudents();
+
+    </script>
+
+</body>
+
+</html>
